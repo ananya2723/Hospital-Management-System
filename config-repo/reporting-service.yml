@@ -1,0 +1,11 @@
+server:
+  port: 8087
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/reporting_db
+    username: hms
+    password: ${DB_PASSWORD:hms_dev_pw}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672

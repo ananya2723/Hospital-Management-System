@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'hms-services'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets:
+          - 'api-gateway:8080'
+          - 'auth-service:8081'
+          - 'patient-service:8082'
+          - 'doctor-service:8083'
+          - 'appointment-service:8084'
+          - 'medical-record-service:8085'
+          - 'billing-service:8086'
+          - 'reporting-service:8087'
+          - 'notification-service:8088'

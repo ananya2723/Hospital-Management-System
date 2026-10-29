@@ -1,0 +1,226 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:16
+    container_name: hms-postgres
+    environment:
+      POSTGRES_USER: hms
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: hms-redis
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: hms-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  mailpit:
+    image: axllent/mailpit
+    container_name: hms-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: hms-zipkin
+    ports:
+      - "9411:9411"
+
+  # Core Platform Microservices
+  discovery-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: discovery-server }
+    container_name: hms-discovery-server
+    environment:
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    ports:
+      - "8761:8761"
+
+  config-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: config-server }
+    container_name: hms-config-server
+    environment:
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    ports:
+      - "8888:8888"
+    depends_on:
+      - discovery-server
+
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: api-gateway }
+    container_name: hms-api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+      JWT_SECRET: ${JWT_SECRET:-beahms-super-secret-key-32bytes-minimum-length-2026}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - discovery-server
+      - config-server
+      - redis
+
+  # Business Domain Services
+  auth-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: auth-service }
+    container_name: hms-auth-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JWT_SECRET: ${JWT_SECRET:-beahms-super-secret-key-32bytes-minimum-length-2026}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - discovery-server
+
+  patient-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: patient-service }
+    container_name: hms-patient-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JWT_SECRET: ${JWT_SECRET:-beahms-super-secret-key-32bytes-minimum-length-2026}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - discovery-server
+
+  doctor-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: doctor-service }
+    container_name: hms-doctor-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JWT_SECRET: ${JWT_SECRET:-beahms-super-secret-key-32bytes-minimum-length-2026}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+      - discovery-server
+
+  appointment-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: appointment-service }
+    container_name: hms-appointment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JWT_SECRET: ${JWT_SECRET:-beahms-super-secret-key-32bytes-minimum-length-2026}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - rabbitmq
+      - discovery-server
+
+  medical-record-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: medical-record-service }
+    container_name: hms-medical-record-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      HMS_DATA_KEY: ${HMS_DATA_KEY:-beahms-medical-data-secret-key-32b}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - discovery-server
+
+  billing-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: billing-service }
+    container_name: hms-billing-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - rabbitmq
+      - discovery-server
+
+  reporting-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: reporting-service }
+    container_name: hms-reporting-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - rabbitmq
+      - discovery-server
+
+  notification-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args: { SERVICE: notification-service }
+    container_name: hms-notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-hms_dev_pw}
+      JAVA_TOOL_OPTIONS: '-Xmx256m'
+    depends_on:
+      - postgres
+      - rabbitmq
+      - mailpit
+      - discovery-server
+
+  # Web Frontend
+  frontend:
+    build:
+      context: ../frontend/hms-web
+      dockerfile: Dockerfile
+    container_name: hms-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  pgdata:

@@ -1,0 +1,48 @@
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: auth-route
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**,/api/v1/users/**
+        - id: patient-route
+          uri: lb://patient-service
+          predicates:
+            - Path=/api/v1/patients/**
+        - id: doctor-route
+          uri: lb://doctor-service
+          predicates:
+            - Path=/api/v1/doctors/**
+        - id: appointment-route
+          uri: lb://appointment-service
+          predicates:
+            - Path=/api/v1/appointments/**
+        - id: record-route
+          uri: lb://medical-record-service
+          predicates:
+            - Path=/api/v1/records/**
+        - id: billing-route
+          uri: lb://billing-service
+          predicates:
+            - Path=/api/v1/bills/**
+        - id: reporting-route
+          uri: lb://reporting-service
+          predicates:
+            - Path=/api/v1/reports/**
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
