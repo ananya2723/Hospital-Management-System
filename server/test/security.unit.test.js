@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { decryptAesGcm, encryptAesGcm } = require('../../Hospital-Management-System-main/server/server');
+const { decryptAesGcm, encryptAesGcm } = require('../server');
 
 test('UT-01 Unit: AES-256-GCM encryption round-trip restores the original clinical value', () => {
   const clinicalValue = 'Essential hypertension with follow-up in four weeks';
