@@ -1,9 +1,25 @@
+# Dependencies
 node_modules/
-**/node_modules/
-target/
-dist/
-*.log
+
+# Secrets
 .env
-server/hms_storage.json
-.DS_Store
+.env.*
+!.env.example
+
+# Build files
+dist/
+build/
 coverage/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
