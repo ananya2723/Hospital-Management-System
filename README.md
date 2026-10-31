@@ -115,14 +115,3 @@ BEA HMS 2.0 implements an 8-service domain structure behind an API Gateway:
 
 ---
 
-## 🧪 9-Step Viva Demonstration Script
-
-1. **Architecture & Gateway**: Explain the 8 business microservices + Eureka, Config, and Gateway. Show `server.js` running on port 8080.
-2. **Receptionist Booking Saga**: In the web UI, click **Reception & Booking**. Select Rajesh Kumar, pick a slot, and click **Confirm Booking**. Observe status move from `PENDING` to `CONFIRMED`.
-3. **Double-Booking Prevention**: Switch to the **Viva & Concurrency Lab** tab. Click **Run 20-Thread Concurrency Test**. Observe that exactly 1 request succeeds (HTTP 201) while 19 return HTTP 409 Conflict. Explain the atomic CAS update.
-4. **Notifications**: Open the **Mailpit Inbox** tab. Show the newly dispatched appointment confirmation email.
-5. **Doctor EHR & AES-256-GCM**: Switch to **Doctor Workspace**. Select the patient and click **Inspect Raw DB Ciphertext**. Show that the diagnosis and prescription in the database are encrypted ciphertext (`Base64[IV + Tag + Ciphertext]`).
-6. **Doctor-Patient Ownership Rule**: In the **Viva Lab**, click **Test Clinical Ownership Boundary**. Observe the RFC 7807 **HTTP 403 Forbidden** response when an unauthorized doctor accesses patient records.
-7. **Idempotent Payment**: Switch to **Billing & Invoicing**. Open an unpaid invoice and click **Test Double-Click Protection**. Show that only 1 transaction was created in the database.
-8. **Executive Reports & CSV**: Switch to **Admin Dashboard**. Show the Recharts daily revenue bar chart, appointments by doctor, and click **Export Fact CSV**.
-9. **Resilience & Circuit Breaker**: In the **Viva Lab**, click **Simulate doctor-service Outage**. Show that downstream services trip the circuit and return HTTP 503 fallback.
