@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 ARG SERVICE
 WORKDIR /app
 COPY pom.xml .
@@ -6,7 +6,7 @@ COPY hms-common ./hms-common
 COPY services ./services
 RUN mvn -B -pl services/${SERVICE} -am -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 ARG SERVICE
 WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*

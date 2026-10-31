@@ -1550,4 +1550,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, INITIAL_STATE };
+module.exports = { app, INITIAL_STATE, encryptAesGcm, decryptAesGcm };

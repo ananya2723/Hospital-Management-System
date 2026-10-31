@@ -128,3 +128,84 @@ test('FR-08: billing is idempotent and rejects overpayment', async () => {
   assert.equal(replay.status, 200);
   assert.equal(replay.body.isDuplicateReplay, true);
 });
+
+test('TC-09 API security: protected patient route rejects a missing bearer token', async () => {
+  const response = await request('GET', '/api/v1/patients');
+  assert.equal(response.status, 401);
+  assert.equal(response.body.title, 'Unauthorized');
+});
+
+test('TC-10 API validation: patient registration requires both name and date of birth', async () => {
+  const response = await request('POST', '/api/v1/patients', {
+    token: receptionistToken,
+    body: { name: 'Missing Date of Birth' }
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.title, 'Validation Failed');
+});
+
+test('TC-11 API validation: patient registration rejects malformed email address', async () => {
+  const response = await request('POST', '/api/v1/patients', {
+    token: receptionistToken,
+    body: { name: 'Invalid Email', dateOfBirth: '2000-01-01', email: 'invalid-email' }
+  });
+  assert.equal(response.status, 400);
+  assert.match(response.body.detail, /email/i);
+});
+
+test('TC-12 API validation: administrator cannot create an unsupported user role', async () => {
+  const response = await request('POST', '/api/v1/users', {
+    token: adminToken,
+    body: { name: 'Invalid Role', email: 'invalid.role@example.com', password: 'Secure@123', role: 'VISITOR' }
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.title, 'Validation Failed');
+});
+
+test('TC-13 API security: receptionist cannot create administrative users', async () => {
+  const response = await request('POST', '/api/v1/users', {
+    token: receptionistToken,
+    body: { name: 'Blocked User', email: 'blocked.user@example.com', password: 'Secure@123', role: 'ADMIN' }
+  });
+  assert.equal(response.status, 403);
+});
+
+test('TC-14 API validation: clinical record requires a completed matching appointment', async () => {
+  const response = await request('POST', '/api/v1/records', {
+    token: doctorToken,
+    body: { patientId: 'p-101', appointmentId: 'appt-conf-002', diagnosis: 'Invalid record workflow' }
+  });
+  assert.equal(response.status, 400);
+  assert.equal(response.body.title, 'Validation Failed');
+});
+
+test('TC-15 API validation: payment requires an idempotency key', async () => {
+  const response = await request('POST', '/api/v1/bills/bill-001/pay', {
+    token: adminToken,
+    body: { amount: 1 }
+  });
+  assert.equal(response.status, 400);
+  assert.match(response.body.detail, /Idempotency-Key/);
+});
+
+test('TC-16 API integration: FHIR endpoint returns an R4 Patient resource', async () => {
+  const response = await request('GET', '/api/v1/fhir/Patient/p-101', { token: adminToken });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.resourceType, 'Patient');
+  assert.equal(response.body.id, 'p-101');
+});
+
+test('TC-17 API integration: administrator can retrieve KPI reporting data', async () => {
+  const response = await request('GET', '/api/v1/reports/kpis', { token: adminToken });
+  assert.equal(response.status, 200);
+  assert.equal(typeof response.body.totalRevenue, 'number');
+  assert.equal(typeof response.body.totalPatients, 'number');
+});
+
+test('TC-18 API integration: concurrent booking benchmark permits one winner only', async () => {
+  const response = await request('POST', '/api/v1/demo/concurrency-test', { body: {} });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.successCount, 1);
+  assert.equal(response.body.conflictCount, 19);
+  assert.equal(response.body.isDefensible, true);
+});
