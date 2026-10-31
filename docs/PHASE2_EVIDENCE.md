@@ -2,7 +2,7 @@
 
 ## Automated API and validation testing
 
-The test suite contains 20 passing cases: 18 API/integration cases and 2 isolated unit tests for AES-256-GCM encryption behavior.
+The test suite contains 23 passing cases: 21 API/integration cases and 2 isolated unit tests for AES-256-GCM encryption behavior.
 
 | ID | Requirement | Evidence |
 | --- | --- | --- |
@@ -16,6 +16,7 @@ The test suite contains 20 passing cases: 18 API/integration cases and 2 isolate
 | TC-15 to TC-17 | API security / validation | Medical records | RBAC `403`; invalid appointment `400`; encrypted record succeeds |
 | TC-18 to TC-19 | API validation | Billing | Missing idempotency key and overpayment rejected; payment replay safe |
 | TC-16 to TC-18 | API / integration | FHIR, reporting, concurrency | FHIR R4 resource, KPI data, and 20-request booking race pass |
+| TC-19 to TC-21 | API / workflow | Consent, rescheduling, no-show | Auditable consent change, safe reschedule, and no-show status tracking succeed |
 | UT-01 to UT-02 | Unit | Encryption utility | AES-256-GCM round trip succeeds; tampered ciphertext is safely rejected |
 
 ## Run locally
@@ -32,7 +33,7 @@ npm ci
 npm run build
 ```
 
-The Node.js built-in test runner reports 20 individually named tests. ESLint reports zero errors, and `npm audit --omit=dev --audit-level=high` reports zero production vulnerabilities. The GitHub Actions quality gate repeats these checks on every push and pull request.
+The Node.js built-in test runner reports 23 individually named tests. ESLint reports zero errors, and `npm audit --omit=dev --audit-level=high` reports zero production vulnerabilities. The GitHub Actions quality gate repeats these checks on every push and pull request.
 
 ## Docker deployment topology
 

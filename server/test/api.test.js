@@ -1,9 +1,8 @@
 const assert = require('node:assert/strict');
-const http = require('node:http');
 const test = require('node:test');
+const supertest = require('supertest');
 const { app } = require('../server');
 
-let server;
 let adminToken;
 let receptionistToken;
 let doctorToken;
@@ -11,25 +10,15 @@ let createdPatient;
 let createdAppointment;
 let createdBill;
 
-function request(method, path, { body, token, headers = {} } = {}) {
-  return new Promise((resolve, reject) => {
-    const payload = body === undefined ? null : JSON.stringify(body);
-    const req = http.request({
-      hostname: '127.0.0.1', port: 8091, path, method,
-      headers: {
-        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...headers
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: data ? JSON.parse(data) : null }));
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
+async function request(method, path, { body, token, headers = {} } = {}) {
+  let requestBuilder = supertest(app)[method.toLowerCase()](path);
+  if (token) requestBuilder = requestBuilder.set('Authorization', `Bearer ${token}`);
+  Object.entries(headers).forEach(([name, value]) => {
+    requestBuilder = requestBuilder.set(name, value);
   });
+  if (body !== undefined) requestBuilder = requestBuilder.send(body);
+  const response = await requestBuilder;
+  return { status: response.status, headers: response.headers, body: response.body };
 }
 
 async function login(email, password) {
@@ -39,13 +28,10 @@ async function login(email, password) {
 }
 
 test.before(async () => {
-  server = app.listen(8091);
   adminToken = await login('admin@bea-hms.com', 'Admin@123');
   receptionistToken = await login('receptionist@bea-hms.com', 'Recept@123');
   doctorToken = await login('doctor@bea-hms.com', 'Doctor@123');
 });
-
-test.after(() => server.close());
 
 test('FR-01: health endpoint reports application availability', async () => {
   const response = await request('GET', '/actuator/health');
@@ -208,4 +194,33 @@ test('TC-18 API integration: concurrent booking benchmark permits one winner onl
   assert.equal(response.body.successCount, 1);
   assert.equal(response.body.conflictCount, 19);
   assert.equal(response.body.isDefensible, true);
+});
+
+test('TC-19 API: consent can be revoked with an audit-ready timestamp', async () => {
+  const response = await request('PUT', `/api/v1/patients/${createdPatient.id}/consent`, {
+    token: receptionistToken,
+    body: { consentGranted: false }
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.consentGranted, false);
+  assert.ok(response.body.consentUpdatedAt);
+});
+
+test('TC-20 API: confirmed appointment can be rescheduled to a free slot', async () => {
+  const slots = await request('GET', '/api/v1/doctors/d-001/slots', { token: receptionistToken });
+  const targetSlot = slots.body.find((slot) => slot.status === 'FREE');
+  const response = await request('PUT', '/api/v1/appointments/appt-conf-002/reschedule', {
+    token: receptionistToken,
+    body: { slotId: targetSlot.id }
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.appointment.slotId, targetSlot.id);
+  assert.equal(response.body.appointment.status, 'CONFIRMED');
+});
+
+test('TC-21 API: confirmed appointment can be marked as no-show', async () => {
+  const response = await request('PUT', '/api/v1/appointments/appt-conf-002/no-show', { token: receptionistToken });
+  assert.equal(response.status, 200);
+  assert.equal(response.body.appointment.status, 'NO_SHOW');
+  assert.ok(response.body.appointment.noShowMarkedAt);
 });

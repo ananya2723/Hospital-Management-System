@@ -729,6 +729,30 @@ app.put('/api/v1/patients/:id', authenticateToken, requireRole('ADMIN', 'RECEPTI
   res.json(patient);
 });
 
+// DPDP consent management with an auditable grant/revocation timestamp
+app.put('/api/v1/patients/:id/consent', authenticateToken, requireRole('ADMIN', 'RECEPTIONIST'), (req, res) => {
+  const patient = db.patients.find(p => p.id === req.params.id && !p.deletedAt);
+  if (!patient) {
+    return sendRfc7807(res, 404, 'Not Found', 'Patient not found', req);
+  }
+  if (typeof req.body.consentGranted !== 'boolean') {
+    return sendRfc7807(res, 400, 'Validation Failed', 'consentGranted must be a boolean value', req);
+  }
+
+  patient.consentGranted = req.body.consentGranted;
+  patient.consentUpdatedAt = new Date().toISOString();
+  recordAudit(
+    req.user.sub,
+    req.user.role,
+    patient.consentGranted ? 'PATIENT_CONSENT_GRANTED' : 'PATIENT_CONSENT_REVOKED',
+    'PATIENT',
+    patient.id,
+    req,
+    patient.branchId
+  );
+  res.json({ id: patient.id, consentGranted: patient.consentGranted, consentUpdatedAt: patient.consentUpdatedAt });
+});
+
 // Soft Delete (sets deleted_at, does not drop rows)
 app.delete('/api/v1/patients/:id', authenticateToken, requireRole('ADMIN'), (req, res) => {
   const patient = db.patients.find(p => p.id === req.params.id && !p.deletedAt);
@@ -1021,6 +1045,71 @@ app.put('/api/v1/appointments/:id/cancel', authenticateToken, requireRole('ADMIN
 
   recordAudit(req.user.sub, req.user.role, 'APPOINTMENT_CANCELLED', 'APPOINTMENT', appt.id, req, appt.branchId);
   res.json({ message: 'Appointment cancelled and doctor slot released', appointment: appt });
+});
+
+// Reschedule is a compensating workflow: reserve the new slot before releasing the old slot.
+app.put('/api/v1/appointments/:id/reschedule', authenticateToken, requireRole('ADMIN', 'RECEPTIONIST'), (req, res) => {
+  const appt = db.appointments.find(a => a.id === req.params.id);
+  if (!appt) return sendRfc7807(res, 404, 'Not Found', 'Appointment not found', req);
+  if (appt.status !== 'CONFIRMED') {
+    return sendRfc7807(res, 400, 'Invalid State Transition', `Cannot reschedule appointment in '${appt.status}' state`, req);
+  }
+
+  const { slotId } = req.body;
+  if (!slotId || slotId === appt.slotId) {
+    return sendRfc7807(res, 400, 'Validation Failed', 'A different target slotId is required', req);
+  }
+  const targetSlot = db.doctorSlots.find(s => s.id === slotId);
+  if (!targetSlot) return sendRfc7807(res, 404, 'Not Found', 'Target slot not found', req);
+  if (targetSlot.doctorId !== appt.doctorId) {
+    return sendRfc7807(res, 400, 'Validation Failed', 'Target slot must belong to the same doctor', req);
+  }
+
+  const reservation = atomicReserveSlot(slotId);
+  if (!reservation.success) {
+    return sendRfc7807(res, 409, 'Slot Already Booked', reservation.reason, req);
+  }
+
+  const previousSlotId = appt.slotId;
+  atomicReleaseSlot(previousSlotId);
+  appt.slotId = targetSlot.id;
+  appt.slotStart = targetSlot.slotStart;
+  appt.slotEnd = targetSlot.slotEnd;
+  appt.appointmentDate = targetSlot.date;
+  appt.version += 1;
+  appt.rescheduledAt = new Date().toISOString();
+
+  db.notifications.unshift({
+    id: crypto.randomUUID(),
+    recipientEmail: appt.patientEmail || 'patient@example.com',
+    notificationType: 'APPOINTMENT_RESCHEDULED',
+    subject: 'Appointment Rescheduled - BEA HMS',
+    body: `Dear ${appt.patientName}, your appointment has been rescheduled to ${appt.slotStart}.`,
+    status: 'SENT',
+    sentAt: new Date().toISOString(),
+    branchId: appt.branchId
+  });
+  recordAudit(req.user.sub, req.user.role, 'APPOINTMENT_RESCHEDULED', 'APPOINTMENT', appt.id, req, appt.branchId);
+  res.json({ message: 'Appointment rescheduled and previous slot released', appointment: appt, previousSlotId });
+});
+
+app.put('/api/v1/appointments/:id/no-show', authenticateToken, requireRole('ADMIN', 'DOCTOR', 'RECEPTIONIST'), (req, res) => {
+  const appt = db.appointments.find(a => a.id === req.params.id);
+  if (!appt) return sendRfc7807(res, 404, 'Not Found', 'Appointment not found', req);
+  if (appt.status !== 'CONFIRMED') {
+    return sendRfc7807(res, 400, 'Invalid State Transition', `Cannot mark appointment in '${appt.status}' state as no-show`, req);
+  }
+  if (req.user.role === 'DOCTOR') {
+    const doctor = db.doctors.find(d => d.userId === req.user.sub);
+    if (!doctor || doctor.id !== appt.doctorId) {
+      return sendRfc7807(res, 403, 'Forbidden', 'Doctors may only mark their own appointments as no-show', req);
+    }
+  }
+
+  appt.status = 'NO_SHOW';
+  appt.noShowMarkedAt = new Date().toISOString();
+  recordAudit(req.user.sub, req.user.role, 'APPOINTMENT_NO_SHOW', 'APPOINTMENT', appt.id, req, appt.branchId);
+  res.json({ message: 'Appointment marked as no-show', appointment: appt });
 });
 
 // Complete Appointment (Moves to COMPLETED, creates bill draft)
