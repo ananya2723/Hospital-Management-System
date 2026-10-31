@@ -159,17 +159,6 @@ export default function ReceptionistPortal() {
     }
   };
 
-  const handleMarkNoShow = async (apptId) => {
-    if (!window.confirm('Mark this confirmed appointment as a no-show?')) return;
-    try {
-      await api.put(`/appointments/${apptId}/no-show`);
-      fetchData();
-      alert('Appointment marked as no-show and added to the audit trail.');
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to mark appointment as no-show');
-    }
-  };
-
   const filteredPatients = patients.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.phone.includes(searchTerm)
@@ -311,24 +300,15 @@ export default function ReceptionistPortal() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div>
                     {a.status === 'CONFIRMED' && (
-                      <>
-                        <button
-                          onClick={() => handleCancelAppointment(a.id)}
-                          className="btn btn-secondary btn-sm"
-                          style={{ color: 'var(--danger)', borderColor: 'var(--danger-light)' }}
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => handleMarkNoShow(a.id)}
-                          className="btn btn-secondary btn-sm"
-                          title="Mark patient as no-show"
-                        >
-                          <AlertTriangle size={14} /> No-show
-                        </button>
-                      </>
+                      <button
+                        onClick={() => handleCancelAppointment(a.id)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ color: 'var(--danger)', borderColor: 'var(--danger-light)' }}
+                      >
+                        Cancel
+                      </button>
                     )}
                   </div>
                 </div>
